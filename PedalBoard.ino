@@ -1,4 +1,5 @@
 /*
+ *
  * PedalBoard
  *
  * Connect an organ pedalboard to your computer for playing music via MIDI, or to perform
@@ -47,8 +48,8 @@ int currentMode = KEYB_MODE;
 // We'll wire up pins 0-12 for the inputs.
 #define NUM_PEDALS 13
 
-// Probably seen as MIDI channel 4 on the synth/computer side
-const byte midiChannel = 3;
+// Probably seen as MIDI channel 1 on the synth/computer side
+const byte midiChannel = 0;
 
 // How loud - hard coded since these are on/off switches; [0, 127]
 const byte midiVelocity = 64;
@@ -72,21 +73,32 @@ int pedalValues[NUM_PEDALS] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
  * mode, hold down the selectPin input button and reset the Arduino board.
  * By default, we start in Keyboard mode.
  */
-int selectPin = 2;
+int selectPin = A5;
 
-int ledPin = 13;
+const int greenLED = A0;
+const int redLED = A1;
 
 void setup() {
-  pinMode(ledPin, OUTPUT);
+  pinMode(greenLED, OUTPUT);
+  pinMode(redLED, OUTPUT);
+
+  digitalWrite(greenLED, HIGH);
+  digitalWrite(redLED, HIGH);
+  delay(2000);
+
   pinMode(selectPin, INPUT_PULLUP);
   delay(50); // 50 ms to allow the button signal to stabilize
   int selectValue = digitalRead(selectPin);
-  if (selectValue == 0) {
+  if (selectValue != 0) {
     // button is pressed
     currentMode = MIDI_MODE;
+    digitalWrite(greenLED, HIGH);
+    digitalWrite(redLED, LOW);
   } else {
     // button is up
     currentMode = KEYB_MODE;
+    digitalWrite(greenLED, LOW);
+    digitalWrite(redLED, HIGH);
   }
 
   if (currentMode == KEYB_MODE) {
@@ -108,15 +120,32 @@ void loop() {
 void loopKeyboard() {
   Keyboard.println("Hello, world!\n");
   Keyboard.println(currentMode);
-  delay(10000); // 10 sec
+
+  // Blink demo
+  for (int i = 0; i < 20; i++) {
+    digitalWrite(greenLED, HIGH);
+    delay(100);
+    digitalWrite(greenLED, LOW);
+    delay(100);
+  }
+
+  delay(100000); // 100 sec
 }
 
 // The loop function for MIDI mode.
 void loopMIDI() {
+
+  // Demo
+  startNote(pitchC3);
+  delay(250);
+  endNote(pitchC3);
+  delay(250);
+
   // Check the input pins for the pedals and send appropriate MIDI events for each.
   for (int i = 0; i < NUM_PEDALS; i++) {
     int pedalValue = digitalRead(pedalInputs[i]);
     if (pedalValues[i] != pedalValue) {
+      /*
       if (pedalValue == 0) {
         // The pedal just went down.
         startNote(notePitches[i]);
@@ -124,6 +153,7 @@ void loopMIDI() {
         // The pedal just came up.
         endNote(notePitches[i]);
       }
+      */
     }
     pedalValues[i] = pedalValue;
   }
@@ -135,13 +165,17 @@ void loopMIDI() {
 void startNote(byte pitch) {
   byte velocity = midiVelocity;
   midiEventPacket_t noteOn = {0x09, 0x90 | midiChannel, pitch, velocity};
+  digitalWrite(redLED, HIGH);
   MidiUSB.sendMIDI(noteOn);
+  digitalWrite(redLED, LOW);
 }
 
 // Send a MIDI event to stop playing the note with the given pitch.
 void endNote(byte pitch) {
   byte velocity = 0;
   midiEventPacket_t noteOff = {0x08, 0x80 | midiChannel, pitch, velocity};
+  digitalWrite(redLED, HIGH);
   MidiUSB.sendMIDI(noteOff);
+  digitalWrite(redLED, LOW);
 }
 
