@@ -62,6 +62,14 @@ const byte notePitches[NUM_PEDALS] = {
   pitchB3b, pitchB3,  pitchC3
   };
 
+const char pedalKeys[NUM_PEDALS] = {
+  //  C              C#            D             D#
+  KEY_LEFT_CTRL, KEY_LEFT_ALT, KEY_LEFT_SHIFT, KEY_TAB,
+  // E F F# G
+  'e', 'f', 'g', 'h',
+  //  G#      A       A#      B       C
+  KEY_F3, KEY_F4, KEY_F5, KEY_F6, KEY_F7};
+
 // Using INPUT_PULLUP for these, so 0 means the pedal is down, 1 means the pedal is up.
 int pedalValues[NUM_PEDALS] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
 
@@ -79,6 +87,10 @@ const int greenLED = A0;
 const int redLED = A1;
 
 void setup() {
+  for (int i = 0; i < NUM_PEDALS; i++) {
+    pinMode(pedalInputs[i], INPUT_PULLUP);
+  }
+
   pinMode(greenLED, OUTPUT);
   pinMode(redLED, OUTPUT);
 
@@ -118,18 +130,21 @@ void loop() {
 
 // The loop function for Keyboard mode.
 void loopKeyboard() {
-  Keyboard.println("Hello, world!\n");
-  Keyboard.println(currentMode);
-
-  // Blink demo
-  for (int i = 0; i < 20; i++) {
-    digitalWrite(greenLED, HIGH);
-    delay(100);
-    digitalWrite(greenLED, LOW);
-    delay(100);
+  // Check the input pins for the pedals and send appropriate key press events for each.
+  for (int i = 0; i < NUM_PEDALS; i++) {
+    int pedalValue = digitalRead(pedalInputs[i]);
+    if (pedalValues[i] != pedalValue) {
+      if (pedalValue == 0) {
+        // The pedal just went down.
+        Keyboard.press(pedalKeys[i]);
+      } else {
+        // The pedal just came up.
+        Keyboard.release(pedalKeys[i]);
+      }
+    }
+    pedalValues[i] = pedalValue;
   }
-
-  delay(100000); // 100 sec
+  delay(10);
 }
 
 // The loop function for MIDI mode.
