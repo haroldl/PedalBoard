@@ -48,8 +48,8 @@ int currentMode = KEYB_MODE;
 // We'll wire up pins 0-12 for the inputs.
 #define NUM_PEDALS 13
 
-// Probably seen as MIDI channel 1 on the synth/computer side
-const byte midiChannel = 0;
+// Probably seen as MIDI channel 2 on the synth/computer side
+const byte midiChannel = 1;
 
 // How loud - hard coded since these are on/off switches; [0, 127]
 const byte midiVelocity = 64;
@@ -86,6 +86,12 @@ int selectPin = A5;
 const int greenLED = A0;
 const int redLED = A1;
 
+/*
+ * Function pointers that are invoked when a button changes state.
+ */
+void (*buttonDownHandler)(int buttonNum) = NULL;
+void (*buttonUpHandler)(int buttonNum) = NULL;
+
 void setup() {
   for (int i = 0; i < NUM_PEDALS; i++) {
     pinMode(pedalInputs[i], INPUT_PULLUP);
@@ -98,48 +104,50 @@ void setup() {
   digitalWrite(redLED, HIGH);
   delay(2000);
 
+  // Figure out which mode we're in based on the switch (default: MIDI)
   pinMode(selectPin, INPUT_PULLUP);
   delay(50); // 50 ms to allow the button signal to stabilize
   int selectValue = digitalRead(selectPin);
-  if (selectValue != 0) {
-    // button is pressed
+  if (selectValue != LOW) {
+    // Switch is open
     currentMode = MIDI_MODE;
     digitalWrite(greenLED, HIGH);
     digitalWrite(redLED, LOW);
   } else {
-    // button is up
+    // Switch is closed
     currentMode = KEYB_MODE;
     digitalWrite(greenLED, LOW);
     digitalWrite(redLED, HIGH);
   }
 
   if (currentMode == KEYB_MODE) {
+    // USB Keyboard mode
+    buttonDownHandler = handleKeyboardDown;
+    buttonUpHandler = handleKeyboardUp;
     Keyboard.begin();
   } else {
-    // Nothing to do for the MIDI mode.
+    // MIDI mode
+    buttonDownHandler = handleMidiDown;
+    buttonUpHandler = handleMidiUp;
   }
 }
 
 void loop() {
-  if (currentMode == KEYB_MODE) {
-    loopKeyboard();
-  } else {
-    loopMIDI();
-  }
-}
-
-// The loop function for Keyboard mode.
-void loopKeyboard() {
-  // Check the input pins for the pedals and send appropriate key press events for each.
+  // Check the input pins for the pedals and call
+  // the appropriate event handler for each change.
   for (int i = 0; i < NUM_PEDALS; i++) {
     int pedalValue = digitalRead(pedalInputs[i]);
     if (pedalValues[i] != pedalValue) {
       if (pedalValue == 0) {
         // The pedal just went down.
-        Keyboard.press(pedalKeys[i]);
+        if (buttonDownHandler != NULL) {
+          buttonDownHandler(i);
+        }
       } else {
         // The pedal just came up.
-        Keyboard.release(pedalKeys[i]);
+        if (buttonUpHandler != NULL) {
+          buttonUpHandler(i);
+        }
       }
     }
     pedalValues[i] = pedalValue;
@@ -147,33 +155,20 @@ void loopKeyboard() {
   delay(10);
 }
 
-// The loop function for MIDI mode.
-void loopMIDI() {
+void handleKeyboardDown(int buttonNum) {
+  Keyboard.press(pedalKeys[buttonNum]);
+}
 
-  // Demo
-  startNote(pitchC3);
-  delay(250);
-  endNote(pitchC3);
-  delay(250);
+void handleKeyboardUp(int buttonNum) {
+  Keyboard.release(pedalKeys[buttonNum]);
+}
 
-  // Check the input pins for the pedals and send appropriate MIDI events for each.
-  for (int i = 0; i < NUM_PEDALS; i++) {
-    int pedalValue = digitalRead(pedalInputs[i]);
-    if (pedalValues[i] != pedalValue) {
-      /*
-      if (pedalValue == 0) {
-        // The pedal just went down.
-        startNote(notePitches[i]);
-      } else {
-        // The pedal just came up.
-        endNote(notePitches[i]);
-      }
-      */
-    }
-    pedalValues[i] = pedalValue;
-  }
+void handleMidiDown(int buttonNum) {
+  startNote(notePitches[buttonNum]);
+}
 
-  delay(10);
+void handleMidiUp(int buttonNum) {
+  endNote(notePitches[buttonNum]);
 }
 
 // Send a MIDI event to start playing the note with the given pitch.
@@ -182,6 +177,7 @@ void startNote(byte pitch) {
   midiEventPacket_t noteOn = {0x09, 0x90 | midiChannel, pitch, velocity};
   digitalWrite(redLED, HIGH);
   MidiUSB.sendMIDI(noteOn);
+  MidiUSB.flush();
   digitalWrite(redLED, LOW);
 }
 
@@ -191,6 +187,7 @@ void endNote(byte pitch) {
   midiEventPacket_t noteOff = {0x08, 0x80 | midiChannel, pitch, velocity};
   digitalWrite(redLED, HIGH);
   MidiUSB.sendMIDI(noteOff);
+  MidiUSB.flush();
   digitalWrite(redLED, LOW);
 }
 
